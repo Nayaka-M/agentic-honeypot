@@ -1,15 +1,16 @@
-# main.py
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import os
 
-# Load your API key from environment variables
-API_KEY = os.getenv("HONEYPOT_API_KEY", "default_key")
+app = FastAPI(
+    title="Agentic Honeypot API",
+    version="1.0.0",
+    description="Scam interaction honeypot service"
+)
 
-app = FastAPI(title="Agentic Honeypot API", version="1.0")
+# ---- Models ----
 
-# Schemas
 class Message(BaseModel):
     sender: str
     text: str
@@ -23,34 +24,45 @@ class Metadata(BaseModel):
 class ScamRequest(BaseModel):
     sessionId: str
     message: Message
-    conversationHistory: List[dict] = []
+    conversationHistory: List[dict]
     metadata: Optional[Metadata] = None
 
 class ScamResponse(BaseModel):
     status: str
     reply: str
 
-# Health check endpoint
-@app.get("/")
-async def health_check():
-    return {"status": "ok", "message": "Honeypot API is running"}
 
-# Honeypot endpoint
+# ---- Health Check ----
+
+@app.get("/")
+def health():
+    return "OK"
+
+
+# ---- Honeypot Endpoint ----
+
 @app.post("/honeypot", response_model=ScamResponse)
-async def honeypot(
-    request: ScamRequest,
+def honeypot(
+    payload: ScamRequest,
     x_api_key: str = Header(...)
 ):
-    if x_api_key != API_KEY:
+    # API key validation
+    if x_api_key != os.getenv("HONEYPOT_API_KEY"):
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
-    # Simple scam detection logic (you can replace this with AI/ML later)
-    text = request.message.text.lower()
-    if any(word in text for word in ["upi", "account", "blocked", "password"]):
-        reply = "I already completed KYC last month."
-    else:
-        reply = "Thanks for the message."
+    text = payload.message.text.lower()
 
-    return {"status": "success", "reply": reply}
+    # VERY FAST rule-based reply (no delay)
+    if "blocked" in text or "verify" in text:
+        reply = "Why is my account being suspended?"
+    elif "upi" in text or "bank" in text:
+        reply = "Can you explain the issue in detail?"
+    else:
+        reply = "I already completed KYC last month."
+
+    return {
+        "status": "success",
+        "reply": reply
+    }
 
 
